@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Any
 import uvicorn
 
 app = FastAPI()
@@ -26,6 +26,7 @@ app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
 # Cache file for device data
 CACHE_FILE = "device_data.json"
+LOGS_CACHE_FILE = "device_logs.json"
 
 # Pydantic model for device data
 class DeviceData(BaseModel):
@@ -43,6 +44,20 @@ class DeviceData(BaseModel):
     bios_version: str = ""
     installed_software: List[str] = []
     last_seen: str = ""  # ISO format timestamp
+    usb_last_connected: str = ""  # ISO format timestamp
+
+class DeviceLogs(BaseModel):
+    hostname: str
+    ip_address: str
+    logs: List[dict]
+
+# Helper function to safely load JSON data from a file
+def safe_load_json(filename):
+    try:
+        with open(filename, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError):
+        return []
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui():
@@ -54,27 +69,40 @@ async def serve_ui():
 async def get_devices():
     """Return all device data from cache."""
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
-            return json.load(f)
+        return safe_load_json(CACHE_FILE)
     return []
 
 @app.post("/devices/report")
 async def receive_device_data(data: DeviceData):
     """Receive and store device data from slaves."""
-    devices = []
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
-            devices = json.load(f)
-    
+    devices = safe_load_json(CACHE_FILE) if os.path.exists(CACHE_FILE) else []
     # Update or add device
-    data_dict = data.dict()
-    data_dict["last_seen"] = datetime.utcnow().isoformat() + "Z"  # UTC timestamp
+    data_dict = data.model_dump()
+    from datetime import timezone
+    data_dict["last_seen"] = datetime.now(timezone.utc).isoformat()
     devices = [d for d in devices if d["ip_address"] != data.ip_address]
     devices.append(data_dict)
-    
     with open(CACHE_FILE, "w") as f:
         json.dump(devices, f)
     return {"status": "received"}
+
+@app.post("/devices/logs")
+async def receive_device_logs(data: DeviceLogs):
+    logs = safe_load_json(LOGS_CACHE_FILE) if os.path.exists(LOGS_CACHE_FILE) else []
+    data_dict = data.model_dump()
+    logs = [l for l in logs if l["ip_address"] != data.ip_address]
+    logs.append(data_dict)
+    with open(LOGS_CACHE_FILE, "w") as f:
+        json.dump(logs, f)
+    return {"status": "received"}
+
+@app.get("/devices/logs/{ip_address}")
+async def get_device_logs(ip_address: str):
+    logs = safe_load_json(LOGS_CACHE_FILE) if os.path.exists(LOGS_CACHE_FILE) else []
+    for log in logs:
+        if log["ip_address"] == ip_address:
+            return log
+    return {"hostname": "Unknown", "ip_address": ip_address, "logs": []}
 
 @app.get("/download/windows")
 async def download_windows_agent():
@@ -96,6 +124,20 @@ async def download_windows_bat():
     if os.path.exists("static/run_agent.bat"):
         return FileResponse("static/run_agent.bat", filename="run_agent.bat")
     raise HTTPException(status_code=404, detail="Batch file not found")
+
+@app.get("/download/clear_usb_history_windows")
+async def download_clear_usb_history_windows():
+    """Serve Windows batch wrapper."""
+    if os.path.exists("static/clear_usb_history.bat"):
+        return FileResponse("static/clear_usb_history.bat", filename="clear_usb_history.bat")
+    raise HTTPException(status_code=404, detail="Batch file not found")
+
+@app.get("/download/clear_usb_history_linux")
+async def download_clear_usb_history_linux():
+    """Serve Linux Bash wrapper."""
+    if os.path.exists("static/clear_usb_history.sh"):
+        return FileResponse("static/clear_usb_history.sh", filename="clear_usb_history.sh")
+    raise HTTPException(status_code=404, detail="Bash file not found")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
