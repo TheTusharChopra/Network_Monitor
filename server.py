@@ -125,6 +125,20 @@ async def download_windows_bat():
         return FileResponse("static/run_agent.bat", filename="run_agent.bat")
     raise HTTPException(status_code=404, detail="Batch file not found")
 
+@app.get("/download/windows-proxy")
+async def download_windows_proxy():
+    """Serve Windows Proxy Agent."""
+    if os.path.exists("static/agent_with_proxy.ps1"):
+        return FileResponse("static/agent_with_proxy.ps1", filename="agent_with_proxy.ps1")
+    raise HTTPException(status_code=404, detail="Proxy agent not found")
+
+@app.get("/download/windows-proxy-bat")
+async def download_windows_proxy_bat():
+    """Serve Windows Proxy Agent."""
+    if os.path.exists("static/run_proxy.bat"):
+        return FileResponse("static/run_proxy.bat", filename="run_proxy.bat")
+    raise HTTPException(status_code=404, detail="Proxy agent not found")
+
 @app.get("/download/clear_usb_history_windows")
 async def download_clear_usb_history_windows():
     """Serve Windows batch wrapper."""
