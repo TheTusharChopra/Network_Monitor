@@ -487,6 +487,18 @@ const App = () => {
           }, 'Windows (.bat)'),
           ' | ',
           React.createElement('a', {
+            key: 'windows-proxy-ps1',
+            href: '/download/windows-proxy',
+            className: 'text-blue-500 hover:underline ml-2'
+          }, 'Windows Proxy (.ps1)'),
+          ' | ',
+          React.createElement('a', {
+            key: 'windows-proxy-bat',
+            href: '/download/windows-proxy-bat',
+            className: 'text-blue-500 hover:underline ml-2'
+          }, 'Windows Proxy (.bat)'),
+          ' | ',
+          React.createElement('a', {
             key: 'linux',
             href: '/download/linux',
             className: 'text-blue-500 hover:underline ml-2'
